@@ -15,6 +15,10 @@ library ForkAddresses {
         uint256 chainId;
         /// @dev The Direct Launch Portal (the "Hub").
         address portal;
+        /// @dev EIP-1967 implementation; the Portal has changed without a version bump.
+        address portalImpl;
+        /// @dev Whether this chain's Portal enforces the LauncherFactory gate.
+        bool enforcesLauncherGate;
         /// @dev Owner is the Flap admin that holds the Portal's admin, manage and auditor roles.
         address proxyAdmin;
         address guardian;
@@ -34,6 +38,8 @@ library ForkAddresses {
         a.rpcEnv = "BSC_RPC_URL";
         a.chainId = 56;
         a.portal = PORTAL;
+        a.portalImpl = 0x9F8324612f4ccbEe427e71c1E962EB12F0bBb10a;
+        a.enforcesLauncherGate = true;
         a.proxyAdmin = PORTAL_PROXY_ADMIN;
         a.guardian = 0x9e27098dcD8844bcc6287a557E0b4D09C86B8a4b;
         a.tokenImpl = TOKEN_IMPL;
@@ -47,6 +53,8 @@ library ForkAddresses {
         a.rpcEnv = "BSC_TESTNET_RPC_URL";
         a.chainId = 97;
         a.portal = PORTAL;
+        a.portalImpl = 0xE56152098690D0A5F365C751f262E32fF58886C3;
+        a.enforcesLauncherGate = false;
         a.proxyAdmin = PORTAL_PROXY_ADMIN;
         a.guardian = 0x00004d58290854c5E9880F4b5B1993c6Ad8b0000;
         a.tokenImpl = TOKEN_IMPL;

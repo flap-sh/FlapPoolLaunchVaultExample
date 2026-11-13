@@ -20,7 +20,7 @@ import {LaunchVaultAddresses} from "src/flap/LaunchVaultAddresses.sol";
 ///         Every `IDirectLaunchVaultFactory` method is left abstract. The base enforces no implementation
 ///         convention: how a vault is deployed, initialized, validated or upgraded is the factory's
 ///         own design. The natspec on each method states what the Hub, the UI and the low-risk audit
-///         expect. `SplitVaultFactory` / `StakingVaultFactory` are worked examples.
+///         expect. `SplitVaultFactory` / `StakeMineVaultFactory` are worked examples.
 ///
 /// @dev  ── WHAT A LAUNCHER VAULT FACTORY IS ─────────────────────────────────
 ///
@@ -29,10 +29,10 @@ import {LaunchVaultAddresses} from "src/flap/LaunchVaultAddresses.sol";
 /// `PortalLauncherBase._parseAndValidateFeeConfigs`. `launchParams` is
 /// `abi.encode(<that kind's create params>, Distribution)`: the factory reads the RAW `p.quoteToken`
 /// (`address(0)` = native, no WBNB normalization) and its own VAULT-slot `vaultData` from it. The
-/// returned vault address lands in a marketing slot and receives that slot's bps share of the token's
-/// quote revenue from then on. There is no on-chain registration requirement to *deploy* a factory;
-/// however, only factories registered via `VaultLaunch.registerVaultFactory` get their vaults stamped
-/// `official`/`riskLevel`/`category` at launch, so production factories SHOULD be registered.
+/// returned vault address is the recipient of the VAULT fee slot (VAULT and MARKETING are mutually
+/// exclusive) and receives that slot's bps share of the token's quote revenue from then on. No on-chain
+/// registration is needed to deploy a factory, but during the beta a launch only goes through a Launcher
+/// whose LauncherFactory Flap has audited and enabled.
 ///
 /// `newVault` runs BEFORE the token is deployed (`predictedToken` is a CREATE2 prediction), so a
 /// factory can revert or return a bogus address but cannot re-enter the Hub: the token is not cloned
@@ -57,7 +57,7 @@ import {LaunchVaultAddresses} from "src/flap/LaunchVaultAddresses.sol";
 /// per-token pattern — see `PortalBase.dividendBeacon` / `PortalDirectLauncherCreate._setupDividend`),
 /// so one beacon upgrade retargets the logic of every already-launched vault at once. Give the vault
 /// implementation a `version()` marker and bump it on each beacon upgrade (mirrors `Dividend.version`).
-/// `StakingVaultFactory` is a complete worked example. This base itself is deliberately storage-free.
+/// `StakeMineVaultFactory` is a complete worked example. This base itself is deliberately storage-free.
 abstract contract DirectLaunchVaultFactoryBase is IDirectLaunchVaultFactory {
     /// @notice The caller is not the Direct Launch Portal (Hub) of this chain.
     error NotHub(address caller);
@@ -141,7 +141,7 @@ abstract contract DirectLaunchVaultFactoryBase is IDirectLaunchVaultFactory {
     function vaultDataSchema() public pure virtual override returns (VaultDataSchema memory);
 
     /// @notice The factory-side spec revision this implementation conforms to. Distinct from the
-    ///         vault-side `StakingVault.vaultSpecVersion()`. MUST return `"pl-v1"`.
+    ///         vault-side `StakeMineVault.version()`. MUST return `"pl-v1"`.
     /// @return The version string.
     function factorySpecVersion() public pure virtual override returns (string memory) {
         return "pl-v1";

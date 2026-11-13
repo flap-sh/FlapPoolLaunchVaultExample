@@ -109,7 +109,7 @@ struct VaultMethodSchema {
 }
 
 /// @notice Top-level schema describing a vault's entire UI surface, returned by `DirectLaunchVaultBase.vaultUISchema()`.
-/// @param vaultType   Human-readable vault type badge (e.g. "StakingVault", "SplitVault").
+/// @param vaultType   Human-readable vault type badge (e.g. "StakeMineVault", "SplitVault").
 /// @param description Overall explanation of the vault.
 /// @param methods     Ordered methods the UI renders in sequence.
 struct VaultUISchema {

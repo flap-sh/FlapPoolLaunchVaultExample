@@ -12,11 +12,11 @@ import {StakeMineVault} from "src/vault/StakeMineVault.sol";
 import {StakeMineVaultFactory} from "src/vault/StakeMineVaultFactory.sol";
 import {ForkBase} from "test/ForkBase.sol";
 
-/// @notice MODE: a Vault that takes the launch's reserve. `StakeMineVault` is handed 80% of the supply, docks all of
+/// @notice VAULT REFERENCE, not a launch mode: `StakeMineVault` is handed 80% of the supply, docks all of
 ///         it in the Token Dock, vests 1% to the dev and mines the rest to stakers; the tax revenue is split between
 ///         the dev and the token's holders.
 ///
-///   What Flap does for you: audit the factory and open it. Because the vault takes the reserve, the launch must be
+///   `_unpause` only isolates the vault; the beta requires a Launcher for an actual launch. The launch must be
 ///   shaped exactly as the factory demands (VAULT distribution target, 80% reserve, 20% in the pool); the first test
 ///   shows what a launch that is not is told.
 abstract contract StakeMineFork is ForkBase {
@@ -27,9 +27,8 @@ abstract contract StakeMineFork is ForkBase {
 
     StakeMineVaultFactory internal factory;
 
-    function _deployAndOpen() internal {
+    function _deploy() internal {
         factory = new StakeMineVaultFactory(wbnb);
-        _openVaultFactory(address(factory));
     }
 
     function _params(bytes32 seed, uint256 poolToken) internal returns (IPortalTypes.CreateTaxTokenParams memory p) {
@@ -85,7 +84,7 @@ abstract contract StakeMineFork is ForkBase {
     // ═════════════════════════════════════════════════════════════════════════
 
     function test_09_stakemine_aLaunchThatDoesNotHandOverTheReserveIsRefused() public {
-        _deployAndOpen();
+        _deploy();
         _unpause();
         IPortalTypes.CreateTaxTokenParams memory p = _params("stakemine-bad-shape", SUPPLY);
         Distribution memory none; // the whole supply goes into the pool and nothing is handed to the vault
@@ -99,7 +98,7 @@ abstract contract StakeMineFork is ForkBase {
     }
 
     function test_09b_stakemine_aLaunchWithoutADividendSlotIsRefused() public {
-        _deployAndOpen();
+        _deploy();
         _unpause();
         IPortalTypes.CreateTaxTokenParams memory p = _params("stakemine-no-dividend", POOL_TOKEN);
         // Drop the DIVIDEND slot: the holders' share would have nowhere to go.
@@ -129,7 +128,7 @@ abstract contract StakeMineFork is ForkBase {
     uint256 internal bobId;
 
     function test_10_stakemine_fullJourney() public {
-        _deployAndOpen();
+        _deploy();
         (jToken, jVault) = _launch("stakemine-journey");
         _stepLaunchAndDock();
         _stepStake();
@@ -220,7 +219,7 @@ abstract contract StakeMineFork is ForkBase {
     }
 
     function test_11_stakemine_revenueGoesToTheDevThenToHolders() public {
-        _deployAndOpen();
+        _deploy();
         (address token, StakeMineVault vault) = _launch("stakemine-revenue");
 
         // Real trading generates tax; the VAULT slot's share reaches the vault in native BNB.
@@ -254,7 +253,7 @@ abstract contract StakeMineFork is ForkBase {
     }
 
     function test_12_stakemine_onlyTheGuardianUpgrades() public {
-        _deployAndOpen();
+        _deploy();
         address impl = address(new StakeMineVault());
         vm.expectRevert();
         factory.upgradeVaultImplementation(impl);

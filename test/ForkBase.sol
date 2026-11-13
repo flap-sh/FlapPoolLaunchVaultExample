@@ -50,11 +50,16 @@ interface ITaxProcessorLike {
 ///         start from, and the helpers to open a factory, mine a salt, trade and dispatch tax.
 ///
 ///   The Portal is the deployed one, so nothing about it is mocked: the Hub and Guardian checks in the factories
-///   resolve to the real addresses on their own. A concrete test picks a mode (Vault only, Launcher only, or
-///   Launcher + Vault) and a chain; see the files next to this one.
+///   resolve to the real addresses on their own. A concrete test picks an example and a chain; see the files
+///   next to this one. Vault reference tests lift the pause to isolate the Vault implementation.
 abstract contract ForkBase is Test {
+    bytes32 internal constant EIP1967_IMPLEMENTATION_SLOT =
+        0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
+
     IPortal internal portal;
     address internal portalAddr;
+    address internal portalImpl;
+    bool internal enforcesLauncherGate;
     address internal proxyAdminAddr;
     address internal guardian;
     address internal tokenImpl;
@@ -85,6 +90,8 @@ abstract contract ForkBase is Test {
         require(block.chainid == a.chainId, "the RPC is not the chain this test expects");
 
         portalAddr = a.portal;
+        portalImpl = a.portalImpl;
+        enforcesLauncherGate = a.enforcesLauncherGate;
         portal = IPortal(a.portal);
         proxyAdminAddr = a.proxyAdmin;
         guardian = a.guardian;
@@ -127,10 +134,20 @@ abstract contract ForkBase is Test {
     /// @dev The oldest Portal release these tests are written against. `v1.1.2` emits the 4-argument
     ///      `FlapNewLauncherCreated`, serves `description()` without reverting, and judges a recorded Launcher by its
     ///      own factory alone. On an older Portal the description assertions and the gate tests would fail for
-    ///      reasons that look like test bugs, so fail here with the reason stated instead.
+    ///      reasons that look like test bugs, so fail here with the reason stated instead. Pin the
+    ///      implementation too: the Portal changed on 2026-11-11 without a version bump.
     function _requirePortalVersion() internal view {
         uint256 v = _parseVersion(IVersioned(portalAddr).version());
         require(v >= 1_001_002, "the live Portal predates v1.1.2: description() and the Launcher gate differ");
+        address actualImpl = address(uint160(uint256(vm.load(portalAddr, EIP1967_IMPLEMENTATION_SLOT))));
+        require(
+            actualImpl == portalImpl,
+            "the live Portal implementation changed: re-run the suite, then update ForkAddresses.portalImpl"
+        );
+    }
+
+    function _requireLauncherGate() internal {
+        if (!enforcesLauncherGate) vm.skip(true);
     }
 
     /// @dev "v1.2.3" -> 1_002_003, big enough to order releases and cheap enough to keep in a test base.

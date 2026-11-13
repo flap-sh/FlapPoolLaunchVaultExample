@@ -7,15 +7,17 @@ pragma solidity ^0.8.13;
 ///      creator extension only — other extensions (e.g. the signed quote-price fallback) have their
 ///      own ids and payloads.
 ///
-///      Usage (where to put it, how to call it): see `LaunchExtensionHelper.md` next to this file.
+///      Usage: `(p.extensionID, p.extensionData) = LaunchExtensionHelper.encodeCreator(creator)`;
+///      `creator` is the user passed to `Portal.newLauncher`. See `MintLauncher._buildParams`.
 ///
 ///      The Portal accepts two encodings:
 ///        * single extension: extensionID = creatorExtensionId(), extensionData = abi.encode(address)
 ///        * extension array:  extensionID = extensionArrayId(),  extensionData = abi.encode(Extension[])
 ///
 ///      The declared creator only affects the `creator` field of `FlapDirectLaunched`. It is honored
-///      only for operator-granted callers; vault resolution, the factory permission policy, the salt
-///      lock and the payment path always use msg.sender.
+///      only for a Launcher recorded by `Portal.newLauncher` (or a contract Flap explicitly granted).
+///      Other callers revert `CreatorOverrideUnauthorized`; `address(0)` reverts `ZeroCreatorAddress`.
+///      Vault resolution, the factory permission policy, the salt lock and payment still use msg.sender.
 library LaunchExtensionHelper {
     /// @notice One entry of the launch's extension array. Layout matches the Portal's
     ///         `IPortalTypes.Extension`.

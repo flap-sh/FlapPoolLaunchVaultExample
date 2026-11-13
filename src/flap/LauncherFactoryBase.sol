@@ -27,8 +27,8 @@ import {LaunchVaultAddresses} from "src/flap/LaunchVaultAddresses.sol";
 ///       The floor multiplier is not returned by the factory. Flap enables the factory and sets it on the
 ///       Portal with `setLauncherFactoryMultiplier(factory, multiplier, enabled)`; the Portal reads it live.
 ///
-///       Salt: the Launcher, not the factory, must call `Portal.lockSalt`. The Portal records
-///       `msg.sender` as the locker and the launch requires `locker == Launcher`; a lock taken by the
+///       Salt: locking is recommended. If used, the Launcher, not the factory, must call
+///       `Portal.lockSalt`: the Portal records `msg.sender` as the locker, and a lock taken by the
 ///       factory makes the launch revert with `FlapSaltLockedByAnotherUser`.
 ///
 ///       Upgrades: the factory itself is immutable; to change it, deploy a new one and have Flap enable it.

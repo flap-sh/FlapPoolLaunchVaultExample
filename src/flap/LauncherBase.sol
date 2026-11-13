@@ -30,9 +30,8 @@ import {LauncherDescription, LauncherHelper} from "src/flap/LauncherHelper.sol";
 ///         - lets it through the creation pause while its factory is enabled.
 ///       A Launcher is not an ERC20 and holds no launch logic: token, pool and vault come from the Portal.
 ///
-///       Salt: `Portal.lockSalt` records `msg.sender` as the locker and the launch requires
-///       `locker == Launcher`, so the Launcher must call `lockSalt` itself. A lock taken by the factory
-///       makes the launch revert.
+///       Salt: locking is recommended. If used, `Portal.lockSalt` records `msg.sender` as the locker,
+///       so the Launcher must call it itself. A lock taken by the factory makes the launch revert.
 ///
 ///       Usage:
 ///         1. Inherit `LauncherBase`.
