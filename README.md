@@ -57,7 +57,9 @@ The UI schema structs (`VaultUISchema`, `VaultDataSchema`, `FieldDescriptor`, ..
 
 ## Directory Structure
 
-`src/flap/` is the only mandated, immutable directory. It contains the canonical Pool Launch spec files and the recommended bases, including the two Launcher bases. The examples are grouped by what you build: `src/vault/` (a Vault only), `src/launcher/` (a Launcher only) and `src/launcher-vault/` (a Launcher and a Vault built as a pair, which must be read together).
+`src/flap/` contains the canonical Pool Launch spec files and the recommended bases, including the two Launcher bases; keep its interfaces and behavior unchanged. The examples are grouped by what you build: `src/vault/` (Vault references behind a Launcher), `src/launcher/` (a Launcher only) and `src/launcher-vault/` (a Launcher and a Vault built as a pair, which must be read together).
+
+> **Beta:** every token launch must go through a Launcher whose LauncherFactory Flap has enabled. `src/vault/` contains reference vaults to use behind a Launcher; it is not a standalone launch mode. The vault-only fork tests unpause the Portal to isolate vault behavior.
 
 ```
 src/
@@ -76,7 +78,8 @@ src/
 │   ├── Distribution.sol               ← remainder hand-off struct
 │   ├── LaunchVaultAddresses.sol       ← per-chain Hub / Guardian / Token Dock addresses
 │   └── LaunchExtensionHelper.sol      ← creator-display helper for Launchers (no imports, copy it as is)
-├── vault/                             ← Vault only
+├── common/                            ← shared anti-scam name/symbol check for Launcher factories
+├── vault/                             ← Vault references (behind a Launcher)
 │   ├── SplitVault.sol / SplitVaultFactory.sol   ← split revenue across recipients by bps
 │   └── StakeMineVault.sol / StakeMineVaultFactory.sol ← takes the reserve, docks it, stake-to-mine
 ├── launcher/                          ← Launcher only
@@ -252,9 +255,10 @@ A Launcher factory implements `ILauncherFactory` ([`ILauncher.sol`](src/flap/ILa
 
 Things a Launcher must get right:
 
-- **Lock the salt itself.** `Portal.lockSalt` records `msg.sender` as the locker, and the launch requires `locker == Launcher`. A lock taken by the factory makes the launch revert.
+- **Lock the salt from the Launcher when you use a lock (recommended).** `Portal.lockSalt` records `msg.sender` as the locker. A lock taken by the factory makes the launch revert.
 - **Launch once.** The Portal allows one launch per Launcher.
 - **Pass exactly the right value.** For a native quote, `msg.value` of the launch must equal `poolQuote + creatorBuyQuote`.
+- **Let the Guardian use every privileged function.** This includes any manual launch, pause, withdrawal or parameter change you add.
 - **Show the real creator.** The Launcher calls the Portal, so `FlapDirectLaunched.creator` would be the Launcher. Declare the user instead:
 
   ```solidity
@@ -342,10 +346,10 @@ If the launch's DIVIDEND slot uses `MAGIC_DIVIDEND_COMPUTED`, the Hub asks the v
 
 ### A Launcher
 
-1. **Launcher**: inherit `LauncherBase`. Keep the Portal address in your own storage and return it from `_getHub()`. Implement `_description()` with the values users should see next to the Launcher. Lock the salt in your initializer. When the mechanism completes, call `_launchOnHub(p, distribution, creatorBuy)`.
+1. **Launcher**: inherit `LauncherBase`. Keep the Portal address in your own storage and return it from `_getHub()`. Implement `_description()` with the values users should see next to the Launcher. Locking the salt in your initializer is recommended. Let the Guardian call every privileged function you add. When the mechanism completes, call `_launchOnHub(p, distribution, creatorBuy)`.
 2. **Factory**: inherit `LauncherFactoryBase`, then implement `_newLauncher(creator, data)`, `launcherDataSchema()` and `upgradeVaultImplementation` (`onlyGuardian`).
 3. **Pair it with a Vault** if the launch needs one, as the Crowd pair does.
-4. **Test** against a Portal stand-in, see below.
+4. **Test** against the live Portal on a fork, see below.
 
 Per-chain addresses (see [`LaunchVaultAddresses.sol`](src/flap/LaunchVaultAddresses.sol)):
 
@@ -363,12 +367,12 @@ Per-chain addresses (see [`LaunchVaultAddresses.sol`](src/flap/LaunchVaultAddres
 forge install            # or: git submodule update --init --recursive
 ```
 
-The tests are fork tests: [`test/`](test/README.md) has fork tests that run each example against the **live Portal** on BNB Chain and BNB Testnet, with nothing mocked. There is one per **mode**, because what you build decides who calls whom and what Flap has to open:
+The tests are fork tests: [`test/`](test/README.md) has fork tests that run each example against the **live Portal** on BNB Chain and BNB Testnet, with nothing mocked. The Vault reference tests lift the creation pause to test the vaults separately:
 
   | Mode | You build | Example | Test |
   |---|---|---|---|
-  | **Vault only** | a Vault plugged into an ordinary launch | `SplitVault` | [`vault/SplitVault`](test/vault/SplitVault.fork.t.sol) |
-  | **Vault only, takes the reserve** | a Vault that is handed 80% of the supply and docks it | `StakeMineVault` | [`vault/StakeMine`](test/vault/StakeMine.fork.t.sol) |
+  | **Vault reference** | a Vault plugged into a launch behind a Launcher | `SplitVault` | [`vault/SplitVault`](test/vault/SplitVault.fork.t.sol) |
+  | **Vault reference, takes the reserve** | a Vault that is handed 80% of the supply and docks it | `StakeMineVault` | [`vault/StakeMine`](test/vault/StakeMine.fork.t.sol) |
   | **Launcher only** | a Launcher that raises, then launches | `MintLauncher` | [`launcher/MintLauncher`](test/launcher/MintLauncher.fork.t.sol) |
   | **Launcher + Vault** | both, locked together | `CrowdLauncher` + `CrowdVault` | [`launcher-vault/Crowd`](test/launcher-vault/Crowd.fork.t.sol) |
 
@@ -400,6 +404,6 @@ Always use `vm.startPrank(user)` / `vm.stopPrank()` instead of bare `vm.prank(us
 
 ## Going Live: Flap Audit
 
-Your factory (Vault factory or Launcher factory) must be audited by Flap before it is used for launches. Once your tests pass, **reach out to us to start the audit.** When it passes, launches through your factory are open, and your vaults are marked low risk. Until then they show as **UNVERIFIED** on Flap.sh.
+Every factory must be audited by Flap before it is used for launches. Once your tests pass, **reach out to us to start the audit.** During the beta Flap enables LauncherFactories only; a Vault Factory may also need a floor multiplier when a launchpad template uses one. Until audit, vaults show as **UNVERIFIED** on Flap.sh.
 
 Do this before you launch your token: after launch you may not be able to change the vault, and some issues may no longer be fixable.

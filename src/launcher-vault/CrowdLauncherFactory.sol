@@ -7,6 +7,7 @@ import {LauncherFactoryBase} from "src/flap/LauncherFactoryBase.sol";
 import {LauncherDataSchema, FieldDescriptor} from "src/flap/IVaultSchemas.sol";
 import {CrowdLauncher, CrowdConfig} from "./CrowdLauncher.sol";
 import {CROWD_MIN_CONTRIBUTOR_BPS, CROWD_MAX_CONTRIBUTOR_BPS} from "./CrowdVault.sol";
+import {NameSymbolCheck} from "src/common/NameSymbolCheck.sol";
 
 /// @title CrowdLauncherFactory
 /// @notice Launcher factory for `CrowdLauncher`. It is the Launcher half of a Launcher + Vault pair:
@@ -18,11 +19,10 @@ import {CROWD_MIN_CONTRIBUTOR_BPS, CROWD_MAX_CONTRIBUTOR_BPS} from "./CrowdVault
 ///           - `contributorBps` within [10%, 90%];
 ///           - `targetRaise` and `saleDuration` non-zero and within sane bounds;
 ///           - non-empty name, symbol, salt.
+///           - name and symbol pass Flap's anti-scam module.
 ///
 ///         Upgrades: Guardian only, through the beacon. No other privileged function.
 contract CrowdLauncherFactory is LauncherFactoryBase {
-    address public immutable hub;
-    address public immutable guardian;
     address public immutable beacon;
     /// @notice The vault factory every Launcher of this factory must use. Fixed at construction.
     address public immutable pairedVaultFactory;
@@ -42,20 +42,18 @@ contract CrowdLauncherFactory is LauncherFactoryBase {
     event CrowdLauncherCreated(address indexed launcher, address indexed creator, bytes32 launchSalt);
     event FlapLauncherImplementationUpgraded(address implementation);
 
-    constructor(address hub_, address guardian_, address pairedVaultFactory_) {
-        if (hub_ == address(0) || guardian_ == address(0) || pairedVaultFactory_ == address(0)) revert ZeroAddress();
-        hub = hub_;
-        guardian = guardian_;
+    constructor(address pairedVaultFactory_) {
+        if (pairedVaultFactory_ == address(0)) revert ZeroAddress();
         pairedVaultFactory = pairedVaultFactory_;
         beacon = address(new UpgradeableBeacon(address(this), address(new CrowdLauncher())));
     }
 
-    function _getHub() internal view override returns (address) {
-        return hub;
+    function hub() public view returns (address) {
+        return _getHub();
     }
 
-    function _getGuardian() internal view override returns (address) {
-        return guardian;
+    function guardian() public view returns (address) {
+        return _getGuardian();
     }
 
     function _newLauncher(address creator, bytes calldata data) internal override returns (address launcher) {
@@ -71,9 +69,10 @@ contract CrowdLauncherFactory is LauncherFactoryBase {
         if (c.targetRaise < MIN_TARGET || c.targetRaise > MAX_TARGET) revert TargetOutOfRange(c.targetRaise);
         if (c.saleDuration == 0 || c.saleDuration > MAX_SALE_DURATION) revert SaleDurationOutOfRange(c.saleDuration);
         if (bytes(c.name).length == 0 || bytes(c.symbol).length == 0 || c.salt == bytes32(0)) revert EmptyField();
+        NameSymbolCheck.check(c.name, c.symbol);
 
         launcher = LibClone.deployDeterministicERC1967BeaconProxy(beacon, c.salt);
-        CrowdLauncher(launcher).initialize{value: msg.value}(hub, creator, c);
+        CrowdLauncher(launcher).initialize{value: msg.value}(_getHub(), creator, c);
         emit CrowdLauncherCreated(launcher, creator, c.salt);
     }
 

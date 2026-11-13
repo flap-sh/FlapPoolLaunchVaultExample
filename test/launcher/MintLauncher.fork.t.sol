@@ -6,6 +6,7 @@ import {IERC20} from "@openzeppelin/token/ERC20/IERC20.sol";
 
 import {MintLauncher, MintConfig} from "src/launcher/MintLauncher.sol";
 import {MintLauncherFactory} from "src/launcher/MintLauncherFactory.sol";
+import {NameSymbolCheck} from "src/common/NameSymbolCheck.sol";
 import {ForkBase} from "test/ForkBase.sol";
 
 /// @notice MODE: a Launcher on its own, no Vault. `MintLauncher` raises a fixed amount of BNB; the contribution that
@@ -14,6 +15,14 @@ import {ForkBase} from "test/ForkBase.sol";
 ///   What Flap does for you: open the LauncherFactory (`setLauncherFactoryMultiplier`). What the test then runs, on a
 ///   live Portal: `Portal.newLauncher` -> contributions -> the launch -> trading and tax -> claims.
 abstract contract MintLauncherFork is ForkBase {
+    function _expectCreateRevert(address factory, bytes memory data, bytes memory reason) internal {
+        uint256 fee = portal.SALT_LOCK_FEE();
+        vm.startPrank(creator);
+        vm.expectRevert(reason);
+        portal.newLauncher{value: fee}(factory, data);
+        vm.stopPrank();
+    }
+
     function _mintConfig(bytes32 seed) internal returns (MintConfig memory c) {
         c.name = "Mint Example";
         c.symbol = "MINTX";
@@ -24,7 +33,8 @@ abstract contract MintLauncherFork is ForkBase {
     }
 
     function test_01_mint_anUnopenedFactoryCannotCreateLaunchers() public {
-        MintLauncherFactory factory = new MintLauncherFactory(portalAddr, guardian);
+        _requireLauncherGate();
+        MintLauncherFactory factory = new MintLauncherFactory();
         bytes memory data = abi.encode(_mintConfig("mint-unopened"));
         uint256 fee = portal.SALT_LOCK_FEE();
 
@@ -38,7 +48,7 @@ abstract contract MintLauncherFork is ForkBase {
     }
 
     function test_02_mint_fullJourney() public {
-        MintLauncherFactory factory = new MintLauncherFactory(portalAddr, guardian);
+        MintLauncherFactory factory = new MintLauncherFactory();
         _openLauncherFactory(address(factory));
         // The live Portal is paused; an opened Launcher factory is what lets its launches through.
         assertTrue(_paused(), "the live Portal is paused, which is the case this test is about");
@@ -87,7 +97,7 @@ abstract contract MintLauncherFork is ForkBase {
     }
 
     function test_03_mint_refundWhenTheTargetIsMissed() public {
-        MintLauncherFactory factory = new MintLauncherFactory(portalAddr, guardian);
+        MintLauncherFactory factory = new MintLauncherFactory();
         _openLauncherFactory(address(factory));
         MintLauncher launcher =
             MintLauncher(payable(_newLauncher(address(factory), abi.encode(_mintConfig("mint-refund")))));
@@ -102,7 +112,7 @@ abstract contract MintLauncherFork is ForkBase {
     }
 
     function test_04_mint_aLauncherLaunchesOnlyOnce() public {
-        MintLauncherFactory factory = new MintLauncherFactory(portalAddr, guardian);
+        MintLauncherFactory factory = new MintLauncherFactory();
         _openLauncherFactory(address(factory));
         MintLauncher launcher =
             MintLauncher(payable(_newLauncher(address(factory), abi.encode(_mintConfig("mint-once")))));
@@ -113,5 +123,46 @@ abstract contract MintLauncherFork is ForkBase {
         vm.prank(bob);
         vm.expectRevert();
         launcher.contribute{value: 1 ether}();
+    }
+
+    function test_04b_mint_rejectsMalformedAndOutOfRangeConfig() public {
+        MintLauncherFactory factory = new MintLauncherFactory();
+        _openLauncherFactory(address(factory));
+        MintConfig memory c = _mintConfig("mint-invalid");
+        bytes memory extra = bytes.concat(abi.encode(c), hex"00");
+        _expectCreateRevert(address(factory), extra, abi.encodeWithSelector(MintLauncherFactory.InvalidData.selector));
+
+        c.symbol = "";
+        _expectCreateRevert(
+            address(factory), abi.encode(c), abi.encodeWithSelector(MintLauncherFactory.EmptyField.selector)
+        );
+
+        c.symbol = "MINTX";
+        c.targetRaise = 0.5 ether;
+        _expectCreateRevert(
+            address(factory),
+            abi.encode(c),
+            abi.encodeWithSelector(MintLauncherFactory.TargetOutOfRange.selector, c.targetRaise)
+        );
+
+        c.targetRaise = 10 ether;
+        c.saleDuration = 31 days;
+        _expectCreateRevert(
+            address(factory),
+            abi.encode(c),
+            abi.encodeWithSelector(MintLauncherFactory.SaleDurationOutOfRange.selector, c.saleDuration)
+        );
+    }
+
+    function test_04c_mint_rejectsBlacklistedSymbol() public {
+        MintLauncherFactory factory = new MintLauncherFactory();
+        _openLauncherFactory(address(factory));
+        MintConfig memory c = _mintConfig("mint-blacklist");
+        c.symbol = "USDT";
+        _expectCreateRevert(
+            address(factory),
+            abi.encode(c),
+            abi.encodeWithSelector(NameSymbolCheck.BlacklistedNameOrSymbol.selector, "USDT")
+        );
     }
 }

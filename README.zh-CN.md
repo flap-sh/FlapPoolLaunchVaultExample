@@ -57,7 +57,9 @@ Launcher 可以不带 Vault 单独发射，也可以与 Vault 配对。`CrowdLau
 
 ## 目录结构
 
-`src/flap/` 是唯一强制且不可修改的目录，存放 Pool Launch 的规范文件和推荐基类（包括 Launcher 的两个基类）。示例按你要构建的东西分组：`src/vault/`（仅 Vault）、`src/launcher/`（仅 Launcher）和 `src/launcher-vault/`（成对构建的 Launcher 和 Vault，需要放在一起看）。
+`src/flap/` 存放 Pool Launch 的规范文件和推荐基类（包括 Launcher 的两个基类）；其接口和行为应保持不变。示例按你要构建的东西分组：`src/vault/`（放在 Launcher 后面使用的 Vault 参考实现）、`src/launcher/`（仅 Launcher）和 `src/launcher-vault/`（成对构建的 Launcher 和 Vault，需要放在一起看）。
+
+> **测试版现状：**每次代币发射都必须经过 Flap 已启用其 LauncherFactory 的 Launcher。`src/vault/` 是放在 Launcher 后面的 Vault 参考实现，不是独立的发射模式。仅 Vault 的 fork 测试会取消 Portal 暂停，以单独验证 Vault。
 
 ```
 src/
@@ -76,7 +78,8 @@ src/
 │   ├── Distribution.sol               ← 预留代币交接结构体
 │   ├── LaunchVaultAddresses.sol       ← 各链的 Hub / Guardian / Token Dock 地址
 │   └── LaunchExtensionHelper.sol      ← Launcher 用的 creator 展示工具（无 import，原样复制即可）
-├── vault/                             ← 仅 Vault
+├── common/                            ← Launcher Factory 共用的 name/symbol 反欺诈检查
+├── vault/                             ← Vault 参考实现（放在 Launcher 后面）
 │   ├── SplitVault.sol / SplitVaultFactory.sol   ← 按 bps 把收入分给多个收款人
 │   └── StakeMineVault.sol / StakeMineVaultFactory.sol ← 接收预留代币、存入驿站、质押挖矿
 ├── launcher/                          ← 仅 Launcher
@@ -252,9 +255,10 @@ Launcher Factory 实现 `ILauncherFactory`（[`ILauncher.sol`](src/flap/ILaunche
 
 Launcher 必须做对的几件事：
 
-- **自己锁 salt。** `Portal.lockSalt` 把 `msg.sender` 记为锁定者，发射要求 `locker == Launcher`。由 Factory 完成的锁会让发射 revert。
+- **如使用 salt 锁，推荐由 Launcher 自己锁。** `Portal.lockSalt` 把 `msg.sender` 记为锁定者。由 Factory 完成的锁会让发射 revert。
 - **只发射一次。** Portal 对每个 Launcher 只允许一次发射。
 - **传入恰好正确的数值。** 原生币 quote 时，发射的 `msg.value` 必须等于 `poolQuote + creatorBuyQuote`。
+- **所有特权操作都允许 Guardian 调用。** 包括以后增加的手动发射、暂停、提款或参数修改。
 - **展示真实的 creator。** Launcher 是调用 Portal 的一方，`FlapDirectLaunched.creator` 默认会是 Launcher。改为声明用户：
 
   ```solidity
@@ -342,10 +346,10 @@ IStrategy(vault).initializeDistribution(token, amount, configData, salt);
 
 ### Launcher
 
-1. **Launcher**：继承 `LauncherBase`。把 Portal 地址保存在你自己的存储里，并从 `_getHub()` 返回。实现 `_description()`，填入用户应该看到的展示数据。在初始化函数里锁定 salt。机制完成后调用 `_launchOnHub(p, distribution, creatorBuy)`。
+1. **Launcher**：继承 `LauncherBase`。把 Portal 地址保存在你自己的存储里，并从 `_getHub()` 返回。实现 `_description()`，填入用户应该看到的展示数据。推荐在初始化函数里锁定 salt；以后增加的每个特权操作都要允许 Guardian 调用。机制完成后调用 `_launchOnHub(p, distribution, creatorBuy)`。
 2. **Factory**：继承 `LauncherFactoryBase`，实现 `_newLauncher(creator, data)`、`launcherDataSchema()` 和 `upgradeVaultImplementation`（`onlyGuardian`）。
 3. 如果发射需要 Vault，就**与 Vault 配对**，像 Crowd 配对那样。
-4. 针对 Portal 替身进行**测试**，见下文。
+4. 在 fork 上针对真实 Portal 进行**测试**，见下文。
 
 各链地址（见 [`LaunchVaultAddresses.sol`](src/flap/LaunchVaultAddresses.sol)）：
 
@@ -363,12 +367,12 @@ IStrategy(vault).initializeDistribution(token, amount, configData, salt);
 forge install            # 或：git submodule update --init --recursive
 ```
 
-测试都是 fork 测试：[`test/`](test/README.zh-CN.md) 里有 fork 测试，针对 BNB Chain 和 BNB Testnet 上**线上的 Portal** 运行每个示例，不使用任何 mock。**每种模式一个**，因为你构建的东西决定了谁调用谁，以及 Flap 需要开放什么：
+测试都是 fork 测试：[`test/`](test/README.zh-CN.md) 里有 fork 测试，针对 BNB Chain 和 BNB Testnet 上**线上的 Portal** 运行每个示例，不使用任何 mock。Vault 参考测试会取消创建暂停，以单独验证 Vault：
 
   | 模式 | 你要构建的 | 示例 | 测试 |
   |---|---|---|---|
-  | **仅 Vault** | 接入普通发射的 Vault | `SplitVault` | [`vault/SplitVault`](test/vault/SplitVault.fork.t.sol) |
-  | **仅 Vault，接收预留代币** | 被交付 80% 供应量并存入驿站的 Vault | `StakeMineVault` | [`vault/StakeMine`](test/vault/StakeMine.fork.t.sol) |
+  | **Vault 参考实现** | 放在 Launcher 后面使用的 Vault | `SplitVault` | [`vault/SplitVault`](test/vault/SplitVault.fork.t.sol) |
+  | **Vault 参考实现，接收预留代币** | 被交付 80% 供应量并存入驿站的 Vault | `StakeMineVault` | [`vault/StakeMine`](test/vault/StakeMine.fork.t.sol) |
   | **仅 Launcher** | 先募集、再发射的 Launcher | `MintLauncher` | [`launcher/MintLauncher`](test/launcher/MintLauncher.fork.t.sol) |
   | **Launcher + Vault** | 两者互相锁定 | `CrowdLauncher` + `CrowdVault` | [`launcher-vault/Crowd`](test/launcher-vault/Crowd.fork.t.sol) |
 
@@ -400,6 +404,6 @@ forge install            # 或：git submodule update --init --recursive
 
 ## 上线：Flap 审计
 
-你的 Factory（Vault Factory 或 Launcher Factory）在用于发射之前，必须经过 Flap 审计。测试全部通过后，**请联系我们发起审计。** 审计通过后，经由你的 Factory 的发射即可开放，你的 Vault 会被标记为低风险。在此之前，它们在 Flap.sh 上显示为 **UNVERIFIED**。
+每个 Factory 在用于发射之前都必须经过 Flap 审计。测试全部通过后，**请联系我们发起审计。** 测试版期间 Flap 只启用 LauncherFactory；如果发射模板需要独立的流动性门槛乘数，Vault Factory 也可配置乘数。审计之前，Vault 在 Flap.sh 上显示为 **UNVERIFIED**。
 
 请在发射代币之前完成：发射后你可能无法再修改 Vault，有些问题可能就无法补救了。

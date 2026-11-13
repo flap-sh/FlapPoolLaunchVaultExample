@@ -126,9 +126,9 @@ interface IPortalTypes {
         //     (kind, quoteToken) LaunchQuoteConfig is disabled; payload = (uint256 quotePriceUsd,
         //     uint256 deadline, bytes signature).
         //   * LaunchExtensions.CREATOR_EXTENSION_ID — declared creator for the FlapDirectLaunched event only. Payload =
-        //     abi.encode(address creator). Honoured only for operator-granted callers; vault
-        //     resolution, the factory permission policy, the salt lock and payment all keep using
-        //     msg.sender.
+        //     abi.encode(address creator). Honoured only for a Launcher recorded by Portal.newLauncher
+        //     (or a contract Flap explicitly granted); vault resolution, the factory permission policy,
+        //     the salt lock and payment all keep using msg.sender.
         // extensionID == 0: no extensions.
         bytes32 extensionID;
         bytes extensionData;
@@ -216,10 +216,10 @@ interface IPortal {
     /// @notice Set the V2 liquidity-floor multiplier and enabled flag for a vault factory. `newMultiplier` is
     ///         0..10_000 bps (10_000 = 1x; lower = lower creation gate and an easier `FlapTokenGraduated`
     ///         milestone) and scales both floors. `enabled` is independent of the multiplier: an enabled
-    ///         factory may use any value including 0, and a disabled one is ignored. An enabled vault
-    ///         factory also lets launches that use it bypass the creation pause. V2-only (V3SS graduation
-    ///         is a separate price-crossing mechanism). Callable by DEFAULT_ADMIN_ROLE, MANAGE_ROLE or
-    ///         AUDITOR_ROLE.
+    ///         factory may use any value including 0, and a disabled one is ignored. During the beta,
+    ///         Flap enables LauncherFactories; the pause bypass is decided by the caller's LauncherFactory.
+    ///         V2-only (V3SS graduation is a separate price-crossing mechanism). Callable by
+    ///         DEFAULT_ADMIN_ROLE, MANAGE_ROLE or AUDITOR_ROLE.
     function setVaultFactoryMultiplier(address factory, uint16 newMultiplier, bool enabled) external;
 
     /// @notice Set a LauncherFactory's floor multiplier and enabled flag. DEFAULT_ADMIN_ROLE, MANAGE_ROLE or

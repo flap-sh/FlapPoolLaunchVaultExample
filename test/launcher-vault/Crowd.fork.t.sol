@@ -31,7 +31,7 @@ abstract contract CrowdFork is ForkBase {
         uint256 nonce = vm.getNonce(address(this));
         address predictedLauncherFactory = vm.computeCreateAddress(address(this), nonce + 1);
         crowdVaultFactory = new CrowdVaultFactory(predictedLauncherFactory);
-        crowdLauncherFactory = new CrowdLauncherFactory(portalAddr, guardian, address(crowdVaultFactory));
+        crowdLauncherFactory = new CrowdLauncherFactory(address(crowdVaultFactory));
         assertEq(address(crowdLauncherFactory), predictedLauncherFactory, "address prediction held");
     }
 
@@ -68,6 +68,7 @@ abstract contract CrowdFork is ForkBase {
     /// @dev The other direction: with the Vault side open, a recorded Launcher whose own factory is disabled stays
     ///      blocked, and enabling it again lets the very same Launcher complete.
     function test_05b_crowd_disabledLauncherFactoryStaysBlocked() public {
+        _requireLauncherGate();
         _deployCrowdPair();
         _openLauncherFactory(address(crowdLauncherFactory));
         _openVaultFactory(address(crowdVaultFactory));
@@ -167,10 +168,27 @@ abstract contract CrowdFork is ForkBase {
         assertApproxEqAbs(vaultAddr.balance, 0, 2, "the vault is paid out");
     }
 
-    function test_07_crowd_theVaultFactoryRefusesAStrangerLauncher() public {
+    function test_07a_crowd_pausedPortalBlocksAStrangerBeforeTheVaultFactory() public {
+        _requireLauncherGate();
         _deployCrowdPair();
         _openVaultFactory(address(crowdVaultFactory));
+        IPortalTypes.CreateTaxTokenParams memory p = _strangerParams();
 
+        vm.expectRevert(CREATION_PAUSED);
+        this.launchStranger(p);
+    }
+
+    function test_07b_crowd_theVaultFactoryRefusesAStrangerLauncher() public {
+        _deployCrowdPair();
+        _unpause();
+        IPortalTypes.CreateTaxTokenParams memory p = _strangerParams();
+
+        vm.expectRevert(abi.encodeWithSelector(CrowdVaultFactory.NotFromLauncherFactory.selector, creator));
+        this.launchStranger(p);
+    }
+
+    /// @dev Mine the salt before setting an expected revert or entering the external launch helper.
+    function _strangerParams() internal returns (IPortalTypes.CreateTaxTokenParams memory p) {
         // A launch that names the Crowd vault factory from a caller the Portal never recorded as its Launcher.
         IPortalTypes.FeeConfig[] memory fees = new IPortalTypes.FeeConfig[](2);
         fees[0] = IPortalTypes.FeeConfig({
@@ -184,7 +202,6 @@ abstract contract CrowdFork is ForkBase {
         });
         fees[1] = IPortalTypes.FeeConfig({feeType: IPortalTypes.FeeSlotType.DEFLATION, bps: 2000, configData: ""});
 
-        IPortalTypes.CreateTaxTokenParams memory p;
         p.name = "Stranger";
         p.symbol = "STR";
         p.meta = "bafkreig4y5nwb4izyilbbmiydumvkld446d4k7j4ohg3x3q2lfel3fo4yq";
@@ -197,11 +214,15 @@ abstract contract CrowdFork is ForkBase {
         p.taxDuration = 30 days;
         p.antiFarmerDuration = 1 days;
         p.feeConfigs = fees;
+    }
+
+    /// @dev Keep the Portal call separate so the expected revert belongs to the launch.
+    function launchStranger(IPortalTypes.CreateTaxTokenParams calldata p) external {
+        require(msg.sender == address(this), "test helper only");
         Distribution memory d;
         IPortalTypes.CreatorBuyParams memory noBuy;
 
         vm.prank(creator);
-        vm.expectRevert(abi.encodeWithSelector(CrowdVaultFactory.NotFromLauncherFactory.selector, creator));
         portal.launchTaxTokenV2{value: 10 ether}(p, d, noBuy);
     }
 }

@@ -11,11 +11,11 @@ import {SplitVault} from "src/vault/SplitVault.sol";
 import {SplitVaultFactory} from "src/vault/SplitVaultFactory.sol";
 import {ForkBase} from "test/ForkBase.sol";
 
-/// @notice MODE: a Vault on its own. `SplitVault` is plugged into an ordinary launch through the VAULT fee slot and
-///         splits the token's tax revenue between recipients; there is no Launcher.
+/// @notice VAULT REFERENCE, not a launch mode: `SplitVault` is plugged into a launch through the VAULT fee slot
+///         and splits the token's tax revenue between recipients.
 ///
-///   What Flap does for you: audit the factory and open it. The test uses an open Portal for the launch itself, then
-///   runs trading, tax and the claim on the real pool.
+///   `_unpause` only isolates the vault; the beta requires a Launcher for an actual launch. The test then runs
+///   trading, tax and the claim on the real pool.
 abstract contract SplitVaultFork is ForkBase {
     function test_08_split_ordinaryLaunchThenClaim() public {
         _unpause();

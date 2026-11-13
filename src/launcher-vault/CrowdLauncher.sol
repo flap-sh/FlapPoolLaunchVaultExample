@@ -61,6 +61,9 @@ struct CrowdConfig {
 ///         Contributions are frozen once the target is reached: no more contributions, no refunds.
 ///
 /// @dev Deployed by `CrowdLauncherFactory` as an ERC1967 beacon proxy.
+///      Guardian recovery: no role holds or routes funds here. Launch at target, refund after the deadline,
+///      and claim are permissionless. Any Launcher that adds a privileged step (manual launch, pause,
+///      withdrawal or parameter change) MUST also let the Guardian call it.
 contract CrowdLauncher is LauncherBase, Initializable, IStrategy {
     using SafeTransferLib for address;
 

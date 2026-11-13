@@ -12,11 +12,11 @@ import {StakeMineVault} from "src/vault/StakeMineVault.sol";
 import {StakeMineVaultFactory} from "src/vault/StakeMineVaultFactory.sol";
 import {ForkBase} from "test/ForkBase.sol";
 
-/// @notice MODE: a Vault that takes the launch's reserve. `StakeMineVault` is handed 80% of the supply, docks all of
+/// @notice VAULT REFERENCE, not a launch mode: `StakeMineVault` is handed 80% of the supply, docks all of
 ///         it in the Token Dock, vests 1% to the dev and mines the rest to stakers; the tax revenue is split between
 ///         the dev and the token's holders.
 ///
-///   What Flap does for you: audit the factory and open it. Because the vault takes the reserve, the launch must be
+///   `_unpause` only isolates the vault; the beta requires a Launcher for an actual launch. The launch must be
 ///   shaped exactly as the factory demands (VAULT distribution target, 80% reserve, 20% in the pool); the first test
 ///   shows what a launch that is not is told.
 abstract contract StakeMineFork is ForkBase {
@@ -29,7 +29,6 @@ abstract contract StakeMineFork is ForkBase {
 
     function _deployAndOpen() internal {
         factory = new StakeMineVaultFactory(wbnb);
-        _openVaultFactory(address(factory));
     }
 
     function _params(bytes32 seed, uint256 poolToken) internal returns (IPortalTypes.CreateTaxTokenParams memory p) {

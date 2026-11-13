@@ -45,7 +45,7 @@ struct MintConfig {
 ///
 ///         Mechanism (what a Launcher author has to get right, in order):
 ///           1. `initialize` runs once, right after the factory deploys the proxy. It locks the launch
-///              salt FROM THIS CONTRACT, because the Portal requires `locker == launcher` at launch time.
+///              salt FROM THIS CONTRACT, because a factory-made lock would block this Launcher's launch.
 ///           2. `contribute()` adds BNB. Each call is capped so `raised <= targetRaise`; the call that makes
 ///              `raised == targetRaise` runs `_launch()` itself. There is no separate launch call, so the
 ///              contract always holds the full raise at that moment.
@@ -62,6 +62,10 @@ struct MintConfig {
 ///         enabled), the Launcher launches once, and a Launcher whose factory is later disabled loses its
 ///         discount and its pause bypass. Everything inside the round (pricing, caps, claim rules) is free to
 ///         change.
+///
+/// @dev Guardian recovery: no role holds or routes funds here. Launch at target, refund after the deadline,
+///      and claim are permissionless. Any Launcher that adds a privileged step (manual launch, pause,
+///      withdrawal or parameter change) MUST also let the Guardian call it.
 ///
 /// @dev Deployed by `MintLauncherFactory` as an ERC1967 beacon proxy, so the implementation can be upgraded
 ///      by the Guardian without changing this contract's address, its salt lock, or any state below.

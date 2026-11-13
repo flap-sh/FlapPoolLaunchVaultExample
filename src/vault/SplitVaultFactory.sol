@@ -20,7 +20,7 @@ import {VaultDataSchema, FieldDescriptor, FactoryPolicy} from "src/flap/IVaultSc
 ///      split logic of every already-launched token at once. Adapted from the production
 ///      FlapTaxVaults/src/SplitVaultFactory.sol, which gated `newVault` to a single fixed VAULT_PORTAL
 ///      and rejected any non-native quote token; this version drops the quote restriction and instead
-///      gates `newVault` to the Hub configured via `setHub` (the Hub's own
+///      gates `newVault` to the chain's Hub from `LaunchVaultAddresses` (`onlyHub`; the Hub's own
 ///      _parseAndValidateFeeConfigs is what actually triggers a `newVault` call, from inside a
 ///      create-facet delegatecall — never callable standalone against a real launch). The caller gate
 ///      prevents a third party from pre-creating the deterministic proxy (a squat that would make the
@@ -28,7 +28,10 @@ import {VaultDataSchema, FieldDescriptor, FactoryPolicy} from "src/flap/IVaultSc
 ///
 ///      UPGRADES: the factory owns the beacon and `upgradeVaultImplementation` is Guardian-only, with no
 ///      owner, proxy admin or deployer path (the low-risk badge condition). To change the factory itself,
-///      deploy a new one and `VaultLaunch.registerVaultFactory` it.
+///      deploy a new one and have it audited and enabled by Flap.
+///
+///      BEHIND A LAUNCHER: the recipient list is the launch's `vaultData`. A Launcher using this vault
+///      MUST fix the list in code or validate it; never forward creator input unchecked.
 ///
 ///      STRICT INPUTS: `newVault` rejects anything that is not exactly the documented shape before it
 ///      deploys: a single VAULT slot naming this factory (non-zero bps), a non-zero `token` / `creator`,
