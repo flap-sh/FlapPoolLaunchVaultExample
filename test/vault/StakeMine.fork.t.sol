@@ -27,7 +27,7 @@ abstract contract StakeMineFork is ForkBase {
 
     StakeMineVaultFactory internal factory;
 
-    function _deployAndOpen() internal {
+    function _deploy() internal {
         factory = new StakeMineVaultFactory(wbnb);
     }
 
@@ -84,7 +84,7 @@ abstract contract StakeMineFork is ForkBase {
     // ═════════════════════════════════════════════════════════════════════════
 
     function test_09_stakemine_aLaunchThatDoesNotHandOverTheReserveIsRefused() public {
-        _deployAndOpen();
+        _deploy();
         _unpause();
         IPortalTypes.CreateTaxTokenParams memory p = _params("stakemine-bad-shape", SUPPLY);
         Distribution memory none; // the whole supply goes into the pool and nothing is handed to the vault
@@ -98,7 +98,7 @@ abstract contract StakeMineFork is ForkBase {
     }
 
     function test_09b_stakemine_aLaunchWithoutADividendSlotIsRefused() public {
-        _deployAndOpen();
+        _deploy();
         _unpause();
         IPortalTypes.CreateTaxTokenParams memory p = _params("stakemine-no-dividend", POOL_TOKEN);
         // Drop the DIVIDEND slot: the holders' share would have nowhere to go.
@@ -128,7 +128,7 @@ abstract contract StakeMineFork is ForkBase {
     uint256 internal bobId;
 
     function test_10_stakemine_fullJourney() public {
-        _deployAndOpen();
+        _deploy();
         (jToken, jVault) = _launch("stakemine-journey");
         _stepLaunchAndDock();
         _stepStake();
@@ -219,7 +219,7 @@ abstract contract StakeMineFork is ForkBase {
     }
 
     function test_11_stakemine_revenueGoesToTheDevThenToHolders() public {
-        _deployAndOpen();
+        _deploy();
         (address token, StakeMineVault vault) = _launch("stakemine-revenue");
 
         // Real trading generates tax; the VAULT slot's share reaches the vault in native BNB.
@@ -253,7 +253,7 @@ abstract contract StakeMineFork is ForkBase {
     }
 
     function test_12_stakemine_onlyTheGuardianUpgrades() public {
-        _deployAndOpen();
+        _deploy();
         address impl = address(new StakeMineVault());
         vm.expectRevert();
         factory.upgradeVaultImplementation(impl);

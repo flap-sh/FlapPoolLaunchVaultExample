@@ -21,7 +21,7 @@ In short:
 - With a **Launcher**, you are the one calling. Locking its own salt is recommended; it must launch once and pass exactly the right value.
 - With **both**, the two must trust each other and nothing else, so a stranger cannot pose as your Launcher.
 
-Every factory is audited. During the beta, Flap enables LauncherFactories only. A Vault Factory can receive its own floor multiplier when a launchpad's template needs one. For a pair, the Portal judges the recorded Launcher by its LauncherFactory; the Vault Factory's `enabled` flag only sets the liquidity-floor multiplier.
+Every factory must pass Flap's audit before it is enabled. During the beta, Flap enables audited LauncherFactories and their paired audited Vault Factories; a paired Vault Factory's enabled flag supports its own liquidity-floor multiplier and UI. Only the caller's LauncherFactory controls the creation-pause bypass. A Vault Factory without a Launcher is not enabled on its own, and unaudited factories are never enabled.
 
 ## What each test covers
 

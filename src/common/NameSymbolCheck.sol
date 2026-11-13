@@ -11,6 +11,7 @@ interface IAntiScamModule {
 /// @notice Check token names and symbols before a Launcher starts collecting funds.
 /// @dev The Portal checks them again only at launch, after the raise. The list can change without notice,
 ///      so a Launcher must keep a refund path if a formerly valid name or symbol becomes blocked.
+///      The module addresses cannot be read from the Portal ABI; keep the table in `module()` in sync manually.
 library NameSymbolCheck {
     error BlacklistedNameOrSymbol(string value);
     error AntiScamModuleUnknown(uint256 chainId);

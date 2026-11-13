@@ -217,7 +217,10 @@ interface IPortal {
     ///         0..10_000 bps (10_000 = 1x; lower = lower creation gate and an easier `FlapTokenGraduated`
     ///         milestone) and scales both floors. `enabled` is independent of the multiplier: an enabled
     ///         factory may use any value including 0, and a disabled one is ignored. During the beta,
-    ///         Flap enables LauncherFactories; the pause bypass is decided by the caller's LauncherFactory.
+    ///         Flap enables audited LauncherFactories and paired audited Vault Factories; the latter's enabled
+    ///         flag supports its own floor multiplier and UI. A Vault Factory without a Launcher is not enabled
+    ///         on its own, and unaudited factories are never enabled. The creation-pause bypass is decided
+    ///         only by the caller's LauncherFactory.
     ///         V2-only (V3SS graduation is a separate price-crossing mechanism). Callable by
     ///         DEFAULT_ADMIN_ROLE, MANAGE_ROLE or AUDITOR_ROLE.
     function setVaultFactoryMultiplier(address factory, uint16 newMultiplier, bool enabled) external;

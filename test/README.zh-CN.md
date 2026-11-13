@@ -21,7 +21,7 @@
 - 做 **Launcher**，你是调用方。推荐由 Launcher 自己锁 salt；它必须只发射一次，并传入恰好正确的数值。
 - **两者都做**，双方只能互相信任、不信任任何其他人，这样陌生合约就不能冒充你的 Launcher。
 
-每个 Factory 都要审计。测试版期间，Flap 只启用 LauncherFactory；发射模板需要独立的流动性门槛乘数时，Vault Factory 可以另设乘数。做配对时，Portal 按已记录的 LauncherFactory 判断 Launcher；Vault Factory 的 `enabled` 标志只决定流动性地板乘数。
+每个 Factory 都必须通过 Flap 审计后才能启用。测试版期间，Flap 会启用通过审计的 LauncherFactory 及其配对且通过审计的 Vault Factory；配对 Vault Factory 的 `enabled` 标志用于它自己的流动性门槛乘数和 UI。发射能否绕过创建暂停只取决于调用方的 LauncherFactory。没有 Launcher 的项目不会单独启用 Vault Factory，未通过审计的 Factory 一律不启用。
 
 ## 每个测试覆盖什么
 

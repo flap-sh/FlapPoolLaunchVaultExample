@@ -404,6 +404,6 @@ forge install            # 或：git submodule update --init --recursive
 
 ## 上线：Flap 审计
 
-每个 Factory 在用于发射之前都必须经过 Flap 审计。测试全部通过后，**请联系我们发起审计。** 测试版期间 Flap 只启用 LauncherFactory；如果发射模板需要独立的流动性门槛乘数，Vault Factory 也可配置乘数。审计之前，Vault 在 Flap.sh 上显示为 **UNVERIFIED**。
+每个 Factory 都必须通过 Flap 审计后才能启用。测试全部通过后，**请联系我们发起审计。** 测试版期间，Flap 会启用通过审计的 LauncherFactory 及其配对且通过审计的 Vault Factory；Vault Factory 的启用状态用于它自己的流动性门槛乘数和 UI。发射能否绕过创建暂停只取决于调用方的 LauncherFactory。没有 Launcher 的项目不会单独启用 Vault Factory，未通过审计的 Factory 一律不启用；未审计的 Vault 在 Flap.sh 上显示为 **UNVERIFIED**。
 
 请在发射代币之前完成：发射后你可能无法再修改 Vault，有些问题可能就无法补救了。

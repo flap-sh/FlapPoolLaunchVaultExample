@@ -404,6 +404,6 @@ Always use `vm.startPrank(user)` / `vm.stopPrank()` instead of bare `vm.prank(us
 
 ## Going Live: Flap Audit
 
-Every factory must be audited by Flap before it is used for launches. Once your tests pass, **reach out to us to start the audit.** During the beta Flap enables LauncherFactories only; a Vault Factory may also need a floor multiplier when a launchpad template uses one. Until audit, vaults show as **UNVERIFIED** on Flap.sh.
+Every factory must be audited by Flap before it is enabled. Once your tests pass, **reach out to us to start the audit.** During the beta, Flap enables audited LauncherFactories and their paired audited Vault Factories; the Vault Factory's enabled flag supports its own liquidity-floor multiplier and UI. Only the caller's LauncherFactory determines whether a launch bypasses the creation pause. A project without a Launcher does not get a Vault Factory enabled on its own. Unaudited factories are never enabled, and unaudited vaults show as **UNVERIFIED** on Flap.sh.
 
 Do this before you launch your token: after launch you may not be able to change the vault, and some issues may no longer be fixable.

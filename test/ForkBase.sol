@@ -140,7 +140,10 @@ abstract contract ForkBase is Test {
         uint256 v = _parseVersion(IVersioned(portalAddr).version());
         require(v >= 1_001_002, "the live Portal predates v1.1.2: description() and the Launcher gate differ");
         address actualImpl = address(uint160(uint256(vm.load(portalAddr, EIP1967_IMPLEMENTATION_SLOT))));
-        require(actualImpl == portalImpl, "the live Portal implementation changed");
+        require(
+            actualImpl == portalImpl,
+            "the live Portal implementation changed: re-run the suite, then update ForkAddresses.portalImpl"
+        );
     }
 
     function _requireLauncherGate() internal {

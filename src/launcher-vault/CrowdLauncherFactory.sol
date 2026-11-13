@@ -18,7 +18,7 @@ import {NameSymbolCheck} from "src/common/NameSymbolCheck.sol";
 ///           - `vaultFactory == pairedVaultFactory`, set once at construction;
 ///           - `contributorBps` within [10%, 90%];
 ///           - `targetRaise` and `saleDuration` non-zero and within sane bounds;
-///           - non-empty name, symbol, salt.
+///           - non-empty name, symbol, salt;
 ///           - name and symbol pass Flap's anti-scam module.
 ///
 ///         Upgrades: Guardian only, through the beacon. No other privileged function.
