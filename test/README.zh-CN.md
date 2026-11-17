@@ -2,26 +2,28 @@
 
 [English](README.md) | **中文**
 
-这些测试针对 BNB Chain 和 BNB Testnet 上**线上的 Portal** 运行示例，不使用任何 mock。它们做的就是你将要做的事：部署 Factory、由 Flap 开放、发射、在真实池子上交易产生税收，最后领取。
+这些测试针对 BNB Chain 和 BNB Testnet 上**线上的 Portal** 运行示例，不使用任何 mock。测试会部署 Factory、验证相关 Portal 权限、发射、在真实池子上交易产生税收，最后领取。仅 Vault 的测试是代码参考；beta 期间不开放这条发射路径。
 
-## 为什么有三种模式
+## 为什么示例有不同形态
 
-你构建的东西决定了谁调用谁，也就决定了需要开放什么、可能在哪里出错。一共三种形态，每种有各自的测试：
+你构建的东西决定了谁调用谁，也就决定了需要开放什么、可能在哪里出错。测试覆盖四种示例形态，其中两种是 Vault 代码参考：
 
 | 模式 | 你构建的 | 谁调用谁 | 示例 | 测试 |
 |---|---|---|---|---|
-| **仅 Vault** | 接收代币税收收入一部分的 Vault | 用户照常发射；**Portal 调用你的 Vault Factory** 来创建 vault | `SplitVault` | [`vault/SplitVault`](vault/SplitVault.fork.t.sol) |
-| **仅 Vault，接收预留代币** | 同时会被交付发射预留代币的 Vault | 同上，但 Portal 还会把 80% 供应量交给 vault | `StakeMineVault` | [`vault/StakeMine`](vault/StakeMine.fork.t.sol) |
+| **仅 Vault（代码参考；beta 期间不开放）** | 接收代币税收收入一部分的 Vault | 在取消暂停的测试 fork 上，**Portal 调用你的 Vault Factory** 创建 vault | `SplitVault` | [`vault/SplitVault`](vault/SplitVault.fork.t.sol) |
+| **仅 Vault，接收预留代币（代码参考；beta 期间不开放）** | 同时会被交付发射预留代币的 Vault | 同上，但 Portal 还会把 80% 供应量交给 vault | `StakeMineVault` | [`vault/StakeMine`](vault/StakeMine.fork.t.sol) |
 | **仅 Launcher** | 先募集或发售、再发射的 Launcher | 用户与你的 Launcher 交互；**你的 Launcher 调用 Portal** | `MintLauncher` | [`launcher/MintLauncher`](launcher/MintLauncher.fork.t.sol) |
 | **Launcher + Vault** | 两者互相锁定 | Launcher 调用 Portal，Portal 调用 Vault Factory，两个 Factory 只接受对方 | `CrowdLauncher` + `CrowdVault` | [`launcher-vault/Crowd`](launcher-vault/Crowd.fork.t.sol) |
+
+两个仅 Vault 测试只在 fork 上取消 Portal 暂停，以便不经过 Launcher 单独验证 Vault 代码。Beta 期间在 BNB Chain 主网上，相同的钱包调用会以 `CreationPaused` revert。上线时须配上由已启用 Launcher Factory 创建的 Launcher。
 
 简单说：
 
 - 做 **Vault**，你是被调用的一方。你的 Factory 必须拒绝任何不是你的 vault 所服务的确切形态的发射。
-- 做 **Launcher**，你是调用方。你的 Launcher 必须自己锁 salt、只发射一次，并传入恰好正确的数值。
+- 做 **Launcher**，你是调用方。如果选择锁 salt，必须由 Launcher 自己锁；它还必须只发射一次，并传入恰好正确的数值。
 - **两者都做**，双方只能互相信任、不信任任何其他人，这样陌生合约就不能冒充你的 Launcher。
 
-Flap 需要做的事也不一样：Vault Factory 要审计并开放；Launcher Factory 要审计并开放。做配对时，Portal 判断的是 Launcher：自 Portal `v1.1.2` 起，已记录的 Launcher 只靠它自己的 Launcher Factory 就足够覆盖，Vault Factory 的 `enabled` 标志只决定流动性地板乘数。每种模式一个测试，是为了让这些差别看得见，而不是糊成一个通用场景。
+Beta 期间，只有通过审计并启用的 Launcher Factory 才能开放发射。Vault Factory 通过审计后只为它的 Vault 启用（流动性地板和 UI），不能单独作为发射路径。做配对时，Portal 根据 Launcher 自己的 Launcher Factory 判断能否通过创建暂停；Vault Factory 的 `enabled` 标志不负责绕过暂停。每种形态的测试都展示了这些差别。
 
 ## 每个测试覆盖什么
 

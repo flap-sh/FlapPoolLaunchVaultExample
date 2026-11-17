@@ -12,13 +12,13 @@ import {StakeMineVault} from "src/vault/StakeMineVault.sol";
 import {StakeMineVaultFactory} from "src/vault/StakeMineVaultFactory.sol";
 import {ForkBase} from "test/ForkBase.sol";
 
-/// @notice MODE: a Vault that takes the launch's reserve. `StakeMineVault` is handed 80% of the supply, docks all of
-///         it in the Token Dock, vests 1% to the dev and mines the rest to stakers; the tax revenue is split between
-///         the dev and the token's holders.
+/// @notice MODE: Vault code reference that takes the launch's reserve. `StakeMineVault` is handed 80% of the supply,
+///         docks it in the Token Dock, vests 1% to the dev and mines the rest to stakers; the tax revenue is split
+///         between the dev and the token's holders.
 ///
-///   What Flap does for you: audit the factory and open it. Because the vault takes the reserve, the launch must be
-///   shaped exactly as the factory demands (VAULT distribution target, 80% reserve, 20% in the pool); the first test
-///   shows what a launch that is not is told.
+///   This test unpauses the Portal on its fork only to exercise Vault code without a Launcher. On BNB Chain mainnet,
+///   the same wallet launch is blocked by `CreationPaused` during the beta. Because the vault takes the reserve,
+///   the launch must match the factory's required shape (VAULT distribution target, 80% reserve, 20% in the pool).
 abstract contract StakeMineFork is ForkBase {
     uint256 internal constant SUPPLY = 1_000_000 ether;
     uint256 internal constant RESERVE = SUPPLY * 8000 / 10_000;

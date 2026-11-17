@@ -11,11 +11,12 @@ import {SplitVault} from "src/vault/SplitVault.sol";
 import {SplitVaultFactory} from "src/vault/SplitVaultFactory.sol";
 import {ForkBase} from "test/ForkBase.sol";
 
-/// @notice MODE: a Vault on its own. `SplitVault` is plugged into an ordinary launch through the VAULT fee slot and
-///         splits the token's tax revenue between recipients; there is no Launcher.
+/// @notice MODE: Vault code reference. `SplitVault` is plugged into a launch through the VAULT fee slot and
+///         splits the token's tax revenue between recipients. During the beta a live launch needs a Launcher.
 ///
-///   What Flap does for you: audit the factory and open it. The test uses an open Portal for the launch itself, then
-///   runs trading, tax and the claim on the real pool.
+///   This test unpauses the Portal on its fork only to exercise Vault code without a Launcher. On BNB Chain mainnet,
+///   the same wallet launch is blocked by `CreationPaused` during the beta. It then runs trading, tax and the claim
+///   on the real pool.
 abstract contract SplitVaultFork is ForkBase {
     function test_08_split_ordinaryLaunchThenClaim() public {
         _unpause();

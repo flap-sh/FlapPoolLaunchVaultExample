@@ -114,4 +114,17 @@ abstract contract MintLauncherFork is ForkBase {
         vm.expectRevert();
         launcher.contribute{value: 1 ether}();
     }
+
+    function test_05_mint_trailingBytesInDataAreRejected() public {
+        MintLauncherFactory factory = new MintLauncherFactory(portalAddr, guardian);
+        _openLauncherFactory(address(factory));
+
+        bytes memory data = bytes.concat(abi.encode(_mintConfig("mint-trailing-data")), abi.encode(uint256(1)));
+        uint256 fee = portal.SALT_LOCK_FEE();
+
+        vm.startPrank(creator);
+        vm.expectRevert(MintLauncherFactory.InvalidData.selector);
+        portal.newLauncher{value: fee}(address(factory), data);
+        vm.stopPrank();
+    }
 }

@@ -2,26 +2,28 @@
 
 **English** | [中文](README.zh-CN.md)
 
-These tests run the examples against the **live Portal** on BNB Chain and BNB Testnet, with nothing mocked. They do what you will do: deploy the factories, have Flap open them, launch, trade on the real pool so tax flows, then collect.
+These tests run the examples against the **live Portal** on BNB Chain and BNB Testnet, with nothing mocked. They deploy factories, exercise the relevant Portal permissions, launch, trade on the real pool so tax flows, then collect. The Vault-only tests are code references; that launch path is not open during the beta.
 
-## Why there are three modes
+## Why these examples have different shapes
 
-What you build decides who calls whom, and so what has to be opened and what can go wrong. There are three shapes, and each has its own test:
+What you build decides who calls whom, and so what has to be opened and what can go wrong. The tests cover four example shapes, including two Vault code references:
 
 | Mode | What you build | Who calls whom | Example | Test |
 |---|---|---|---|---|
-| **Vault only** | A Vault that receives a share of a token's tax revenue | A user launches as usual; the **Portal calls your Vault factory** to create the vault | `SplitVault` | [`vault/SplitVault`](vault/SplitVault.fork.t.sol) |
-| **Vault only, takes the reserve** | A Vault that is also handed the launch's reserved tokens | Same, but the Portal also hands the vault 80% of the supply | `StakeMineVault` | [`vault/StakeMine`](vault/StakeMine.fork.t.sol) |
+| **Vault only (code reference; not open during the beta)** | A Vault that receives a share of a token's tax revenue | On an unpaused test fork, the **Portal calls your Vault factory** to create the vault | `SplitVault` | [`vault/SplitVault`](vault/SplitVault.fork.t.sol) |
+| **Vault only, takes the reserve (code reference; not open during the beta)** | A Vault that is also handed the launch's reserved tokens | Same, but the Portal also hands the vault 80% of the supply | `StakeMineVault` | [`vault/StakeMine`](vault/StakeMine.fork.t.sol) |
 | **Launcher only** | A Launcher that raises or sells first, then launches | Users talk to your Launcher; **your Launcher calls the Portal** | `MintLauncher` | [`launcher/MintLauncher`](launcher/MintLauncher.fork.t.sol) |
 | **Launcher + Vault** | Both, locked together | The Launcher calls the Portal, the Portal calls the Vault factory, and each factory only accepts the other | `CrowdLauncher` + `CrowdVault` | [`launcher-vault/Crowd`](launcher-vault/Crowd.fork.t.sol) |
+
+The two Vault-only tests unpause the Portal on their forks solely to exercise the Vault code without a Launcher. On BNB Chain mainnet, the same wallet call reverts `CreationPaused` during the beta. To go live, pair the Vault with a Launcher created by an enabled Launcher Factory.
 
 In short:
 
 - With a **Vault**, you are the one being called. Your factory must refuse any launch that is not the exact shape your vault serves.
-- With a **Launcher**, you are the one calling. Your Launcher must lock its own salt, launch once and pass exactly the right value.
+- With a **Launcher**, you are the one calling. If you lock the salt, the Launcher must do it itself; it must launch once and pass exactly the right value.
 - With **both**, the two must trust each other and nothing else, so a stranger cannot pose as your Launcher.
 
-What Flap does for each is different too: a Vault factory is audited and opened; a Launcher factory is audited and opened. For a pair, the Launcher is what the Portal judges: since Portal `v1.1.2` a recorded Launcher is covered by its own Launcher factory alone, and the Vault factory's `enabled` flag only sets the liquidity-floor multiplier. A test for each mode keeps those differences visible instead of blurring them into one generic scenario.
+During the beta, only an audited, enabled Launcher Factory opens launches. A Vault Factory is audited and enabled for its Vault (floor and UI), never as a launch path on its own. For a pair, the Portal judges the Launcher by its own Launcher Factory; the Vault Factory's `enabled` flag does not bypass the creation pause. A test for each shape keeps these differences visible.
 
 ## What each test covers
 

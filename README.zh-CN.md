@@ -57,7 +57,7 @@ Launcher 可以不带 Vault 单独发射，也可以与 Vault 配对。`CrowdLau
 
 ## 目录结构
 
-`src/flap/` 是唯一强制且不可修改的目录，存放 Pool Launch 的规范文件和推荐基类（包括 Launcher 的两个基类）。示例按你要构建的东西分组：`src/vault/`（仅 Vault）、`src/launcher/`（仅 Launcher）和 `src/launcher-vault/`（成对构建的 Launcher 和 Vault，需要放在一起看）。
+`src/flap/` 是唯一强制且不可修改的目录，存放 Pool Launch 的规范文件和推荐基类（包括 Launcher 的两个基类）。示例按你要构建的东西分组：`src/vault/`（Vault 代码参考，beta 期间必须与 Launcher 配对，见下文说明）、`src/launcher/`（仅 Launcher）和 `src/launcher-vault/`（成对构建的 Launcher 和 Vault，需要放在一起看）。
 
 ```
 src/
@@ -76,7 +76,7 @@ src/
 │   ├── Distribution.sol               ← 预留代币交接结构体
 │   ├── LaunchVaultAddresses.sol       ← 各链的 Hub / Guardian / Token Dock 地址
 │   └── LaunchExtensionHelper.sol      ← Launcher 用的 creator 展示工具（无 import，原样复制即可）
-├── vault/                             ← 仅 Vault
+├── vault/                             ← Vault 代码参考（beta 期间需配 Launcher）
 │   ├── SplitVault.sol / SplitVaultFactory.sol   ← 按 bps 把收入分给多个收款人
 │   └── StakeMineVault.sol / StakeMineVaultFactory.sol ← 接收预留代币、存入驿站、质押挖矿
 ├── launcher/                          ← 仅 Launcher
@@ -87,6 +87,8 @@ src/
 ```
 
 ---
+
+> **Beta 期间只能通过 Launcher 发射。** Pool Launch 只接受由已审计、已启用的 Launcher Factory 创建的 Launcher 发起的发射。钱包直接调用 `launchTaxTokenV2` 并带上 VAULT 槽位的“仅 Vault”发射**暂未开放**：在 BNB Chain 上，非已启用 Factory 创建的 Launcher 会被创建暂停挡住。`SplitVault` 和 `StakeMineVault` 是 **Vault 代码参考**；要上线，须像 Crowd 配对示例一样搭配自己的 Launcher，并让 Vault Factory 检查 `getLauncher(creator).launcherFactory` 是否为自己的 Launcher Factory。
 
 ## Pool Launch Vault 接口
 
@@ -123,7 +125,7 @@ src/
 ## Pool Launch Vault 是如何被创建的
 
 ```
-creator ──launchTaxTokenV2(p, distribution, creatorBuy)──▶ Direct Launch Portal (Hub)
+Launcher ──launchTaxTokenV2(p, distribution, creatorBuy)──▶ Direct Launch Portal (Hub)
                                                               │
                      1. 解析 p.feeConfigs，找到 VAULT 槽位 {vaultFactory, vaultData}
                      2. newVault(predictedToken, creator, launchKind, abi.encode(p, distribution))
@@ -248,11 +250,11 @@ Launcher Factory 实现 `ILauncherFactory`（[`ILauncher.sol`](src/flap/ILaunche
 | `launcherDataSchema()` | 描述你的 `data` 字节，让 Flap.sh 渲染创建表单。 |
 | `upgradeVaultImplementation(newImpl)` | 升级该 Factory 所有 Launcher。**仅限 Guardian。** 持有不可变 Launcher 的 Factory 直接 revert。 |
 
-[`LauncherFactoryBase`](src/flap/LauncherFactoryBase.sol) 与 [`LauncherBase`](src/flap/LauncherBase.sol) 是无存储的基类。`LauncherFactoryBase` 给 `newLauncher` 加上 `onlyHub` 并固定 `factorySpecVersion`；`LauncherBase` 为你的 Launcher 提供 `_getHub()`、`onlyHub`、`onlyGuardian`、`_launchOnHub(...)` 以及 `description()`（实现 `_description()`，由 `LauncherHelper` 渲染成 Portal 折进 `FlapNewLauncherCreated` 的 v1 JSON）。
+[`LauncherFactoryBase`](src/flap/LauncherFactoryBase.sol) 与 [`LauncherBase`](src/flap/LauncherBase.sol) 是无存储的基类。**`LauncherFactoryBase` 是强制的：Flap 只启用继承它的 Launcher Factory。** `LauncherBase` 则是推荐使用。`LauncherFactoryBase` 给 `newLauncher` 加上 `onlyHub` 并固定 `factorySpecVersion`；`LauncherBase` 为你的 Launcher 提供 `_getHub()`、`onlyHub`、`onlyGuardian`、`_launchOnHub(...)` 以及 `description()`（实现 `_description()`，由 `LauncherHelper` 渲染成 Portal 折进 `FlapNewLauncherCreated` 的 v1 JSON）。
 
 Launcher 必须做对的几件事：
 
-- **自己锁 salt。** `Portal.lockSalt` 把 `msg.sender` 记为锁定者，发射要求 `locker == Launcher`。由 Factory 完成的锁会让发射 revert。
+- **如果锁 salt，必须由 Launcher 自己锁**（推荐，但非强制）。锁定可防止预期代币地址在发射前被占用。`Portal.lockSalt` 把 `msg.sender` 记为锁定者，锁定后只有锁定者能用这个 salt 发射；由 Factory 锁定会让 Launcher 的发射以 `FlapSaltLockedByAnotherUser` revert。Launcher 也可以不锁，让开发者在 Launcher 的 UI 中输入 salt。两个示例都在 `initialize` 中锁定，费用由 Factory 转发的 `msg.value` 支付。
 - **只发射一次。** Portal 对每个 Launcher 只允许一次发射。
 - **传入恰好正确的数值。** 原生币 quote 时，发射的 `msg.value` 必须等于 `poolQuote + creatorBuyQuote`。
 - **展示真实的 creator。** Launcher 是调用 Portal 的一方，`FlapDirectLaunched.creator` 默认会是 Launcher。改为声明用户：
@@ -304,7 +306,7 @@ IStrategy(vault).initializeDistribution(token, amount, configData, salt);
 
 - **不要缓存 Dock 地址。** Hub 把 `(vault, token)` 加入白名单后，Router 会把存款路由到带标签的 `VerifiedTokenDock`，在此之前路由到无标签的 `OpenTokenDock`，并自动迁移余额。
 - `withdraw` 永远不受限制。
-- 在两个 Dock 都被排除出该代币的分红之前，不要把预留代币存进 Dock，先留在 Vault 中（Hub 会把 Vault 排除出分红）。
+- 发射时两个 Token Dock 都已与 Portal、税收处理器和 Vault 一起被排除出代币分红，因此可以像 `StakeMineVault` 一样在 `initializeDistribution` 中将预留代币存入 Dock。
 
 ### 计算分红代币
 
@@ -326,7 +328,7 @@ IStrategy(vault).initializeDistribution(token, amount, configData, salt);
        --rpc-url https://bsc-dataseed.bnbchain.org --account deployer --broadcast
    ```
 
-5. **发射**：把你的 Factory 放进发射参数的 VAULT 费用槽位：
+5. **从 Launcher 发射**：由 Launcher 把你的 Factory 放进发射参数的 VAULT 费用槽位并调用 Portal（beta 期间钱包不能直接调用 `launchTaxTokenV2`）：
 
    ```solidity
    p.feeConfigs[i] = IPortalTypes.FeeConfig({
@@ -337,15 +339,16 @@ IStrategy(vault).initializeDistribution(token, amount, configData, salt);
            vaultData: abi.encode(/* 你的 vaultData */)
        }))
    });
-   IPortal(DIRECT_LAUNCH_PORTAL).launchTaxTokenV2{value: ...}(p, distribution, creatorBuy);
+   // 在 Launcher 内准备好 p 及 VAULT 费用槽位后调用：
+   _launchOnHub(p, distribution, creatorBuy);
    ```
 
 ### Launcher
 
-1. **Launcher**：继承 `LauncherBase`。把 Portal 地址保存在你自己的存储里，并从 `_getHub()` 返回。实现 `_description()`，填入用户应该看到的展示数据。在初始化函数里锁定 salt。机制完成后调用 `_launchOnHub(p, distribution, creatorBuy)`。
-2. **Factory**：继承 `LauncherFactoryBase`，实现 `_newLauncher(creator, data)`、`launcherDataSchema()` 和 `upgradeVaultImplementation`（`onlyGuardian`）。
+1. **Launcher**：继承 `LauncherBase`。把 Portal 地址保存在你自己的存储里，并从 `_getHub()` 返回。实现 `_description()`，填入用户应该看到的展示数据。推荐在初始化函数里锁定 salt。机制完成后调用 `_launchOnHub(p, distribution, creatorBuy)`。
+2. **Factory**：继承 `LauncherFactoryBase`（强制，Flap 只启用继承它的 Factory），实现 `_newLauncher(creator, data)`（严格解码 `data`）、`launcherDataSchema()` 和 `upgradeVaultImplementation`（`onlyGuardian`）。
 3. 如果发射需要 Vault，就**与 Vault 配对**，像 Crowd 配对那样。
-4. 针对 Portal 替身进行**测试**，见下文。
+4. 针对线上 Portal 做 **fork 测试**，见下文。
 
 各链地址（见 [`LaunchVaultAddresses.sol`](src/flap/LaunchVaultAddresses.sol)）：
 
@@ -367,12 +370,12 @@ forge install            # 或：git submodule update --init --recursive
 
   | 模式 | 你要构建的 | 示例 | 测试 |
   |---|---|---|---|
-  | **仅 Vault** | 接入普通发射的 Vault | `SplitVault` | [`vault/SplitVault`](test/vault/SplitVault.fork.t.sol) |
-  | **仅 Vault，接收预留代币** | 被交付 80% 供应量并存入驿站的 Vault | `StakeMineVault` | [`vault/StakeMine`](test/vault/StakeMine.fork.t.sol) |
+  | **Vault 代码参考（beta 期间需配 Launcher）** | 接入发射的 Vault | `SplitVault` | [`vault/SplitVault`](test/vault/SplitVault.fork.t.sol) |
+  | **接收预留代币的 Vault 代码参考（beta 期间需配 Launcher）** | 被交付 80% 供应量并存入驿站的 Vault | `StakeMineVault` | [`vault/StakeMine`](test/vault/StakeMine.fork.t.sol) |
   | **仅 Launcher** | 先募集、再发射的 Launcher | `MintLauncher` | [`launcher/MintLauncher`](test/launcher/MintLauncher.fork.t.sol) |
   | **Launcher + Vault** | 两者互相锁定 | `CrowdLauncher` + `CrowdVault` | [`launcher-vault/Crowd`](test/launcher-vault/Crowd.fork.t.sol) |
 
-  [`test/README.zh-CN.md`](test/README.zh-CN.md) 解释了这三种模式、每个测试覆盖什么，以及如何只跑一种模式或一条链。简要命令：
+  [`test/README.zh-CN.md`](test/README.zh-CN.md) 解释了这些示例形态、每个测试覆盖什么，以及如何只跑一种形态或一条链。简要命令：
 
   ```bash
   cp .env.example .env        # 填入你自己的 RPC 地址，见文件里的说明
@@ -400,6 +403,6 @@ forge install            # 或：git submodule update --init --recursive
 
 ## 上线：Flap 审计
 
-你的 Factory（Vault Factory 或 Launcher Factory）在用于发射之前，必须经过 Flap 审计。测试全部通过后，**请联系我们发起审计。** 审计通过后，经由你的 Factory 的发射即可开放，你的 Vault 会被标记为低风险。在此之前，它们在 Flap.sh 上显示为 **UNVERIFIED**。
+Beta 期间，通过 **Launcher Factory** 开放发射：Flap 审计并在 Portal 上启用它，之后由它创建的 Launcher 才能发射。如果发射还使用 Vault，其 Vault Factory 也必须通过审计；Flap 为该 Vault 本身启用它（用于流动性门槛和 UI）。Launcher 能否通过创建暂停只看自己的 Launcher Factory；单独一个 Vault Factory 不能发射代币。测试全部通过后，**请联系我们发起审计。** 审计通过的 Vault 会被标记为低风险；在此之前，它们在 Flap.sh 上显示为 **UNVERIFIED**。
 
 请在发射代币之前完成：发射后你可能无法再修改 Vault，有些问题可能就无法补救了。

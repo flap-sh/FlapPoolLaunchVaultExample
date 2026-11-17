@@ -42,6 +42,7 @@ contract MintLauncherFactory is LauncherFactoryBase {
     event FlapLauncherImplementationUpgraded(address implementation);
 
     error ZeroAddress();
+    error InvalidData();
 
     constructor(address hub_, address guardian_) {
         if (hub_ == address(0) || guardian_ == address(0)) revert ZeroAddress();
@@ -67,7 +68,9 @@ contract MintLauncherFactory is LauncherFactoryBase {
     /// @dev `msg.value` (the salt-lock fee) is forwarded to the Launcher, which pays the Portal itself so the
     ///      lock is recorded against the Launcher and not against this factory.
     function _newLauncher(address creator, bytes calldata data) internal override returns (address launcher) {
+        // abi.decode ignores trailing bytes. MintConfig contains dynamic strings, so require canonical encoding.
         MintConfig memory config = abi.decode(data, (MintConfig));
+        if (keccak256(abi.encode(config)) != keccak256(data)) revert InvalidData();
 
         launcher = LibClone.deployDeterministicERC1967BeaconProxy(beacon, config.salt);
         MintLauncher(launcher).initialize{value: msg.value}(hub, creator, config);

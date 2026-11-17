@@ -170,6 +170,8 @@ abstract contract CrowdFork is ForkBase {
     function test_07_crowd_theVaultFactoryRefusesAStrangerLauncher() public {
         _deployCrowdPair();
         _openVaultFactory(address(crowdVaultFactory));
+        // Unpause this fork so the call reaches the Vault Factory's pairing check.
+        _unpause();
 
         // A launch that names the Crowd vault factory from a caller the Portal never recorded as its Launcher.
         IPortalTypes.FeeConfig[] memory fees = new IPortalTypes.FeeConfig[](2);
@@ -200,8 +202,9 @@ abstract contract CrowdFork is ForkBase {
         Distribution memory d;
         IPortalTypes.CreatorBuyParams memory noBuy;
 
-        vm.prank(creator);
+        vm.startPrank(creator);
         vm.expectRevert(abi.encodeWithSelector(CrowdVaultFactory.NotFromLauncherFactory.selector, creator));
         portal.launchTaxTokenV2{value: 10 ether}(p, d, noBuy);
+        vm.stopPrank();
     }
 }
