@@ -6,6 +6,8 @@ import {UpgradeableBeacon} from "solady/utils/UpgradeableBeacon.sol";
 import {LauncherFactoryBase} from "src/flap/LauncherFactoryBase.sol";
 import {MintLauncher, MintConfig} from "./MintLauncher.sol";
 import {LauncherDataSchema, FieldDescriptor} from "src/flap/IVaultSchemas.sol";
+import {IPortalTypes} from "src/flap/IPortal.sol";
+import {IPortalLaunchFloor} from "src/common/IPortalLaunchFloor.sol";
 
 /// @title MintLauncherFactory
 /// @notice Reference factory for `MintLauncher`. Shows what a Launcher factory has to do:
@@ -29,6 +31,8 @@ import {LauncherDataSchema, FieldDescriptor} from "src/flap/IVaultSchemas.sol";
 ///         The factory computes no multiplier. Flap enables it on the Portal with
 ///         `setLauncherFactoryMultiplier(factory, multiplier, enabled)`.
 contract MintLauncherFactory is LauncherFactoryBase {
+    uint256 public constant MAX_TARGET = 10_000 ether;
+
     /// @notice The Pool Launch Portal this factory deploys Launchers for.
     address public immutable hub;
     /// @notice The only account allowed to upgrade the Launcher implementation.
@@ -43,6 +47,9 @@ contract MintLauncherFactory is LauncherFactoryBase {
 
     error ZeroAddress();
     error InvalidData();
+    error TargetOutOfRange(uint256 got);
+    error QuoteNotEnabled();
+    error BelowLaunchFloor(uint256 haveUsd, uint256 needUsd);
 
     constructor(address hub_, address guardian_) {
         if (hub_ == address(0) || guardian_ == address(0)) revert ZeroAddress();
@@ -71,6 +78,25 @@ contract MintLauncherFactory is LauncherFactoryBase {
         // abi.decode ignores trailing bytes. MintConfig contains dynamic strings, so require canonical encoding.
         MintConfig memory config = abi.decode(data, (MintConfig));
         if (keccak256(abi.encode(config)) != keccak256(data)) revert InvalidData();
+        if (config.targetRaise == 0 || config.targetRaise > MAX_TARGET) revert TargetOutOfRange(config.targetRaise);
+
+        IPortalLaunchFloor floorPortal = IPortalLaunchFloor(hub);
+        (bool enabled, uint256 price) =
+            floorPortal.launchQuoteConfig(uint8(IPortalTypes.LaunchKind.DIRECT_V2_POOL_TAX), address(0));
+        if (!enabled) revert QuoteNotEnabled();
+        // Read the current beacon implementation so a Guardian upgrade cannot make this preview use stale constants.
+        MintLauncher implementation = MintLauncher(payable(UpgradeableBeacon(beacon).implementation()));
+        IPortalLaunchFloor.GraduationFloorResultV2 memory floor = floorPortal.graduationFloorV2(
+            IPortalLaunchFloor.GraduationFloorParams({
+                quoteToken: address(0),
+                quotePriceUsd: price,
+                poolQuote: config.targetRaise,
+                poolToken: implementation.POOL_TOKEN(),
+                totalSupply: implementation.TOTAL_SUPPLY(),
+                vaultFactory: address(0)
+            })
+        );
+        if (!floor.meetsCreateFloor) revert BelowLaunchFloor(floor.quoteUsdWad, floor.createFloorUsdWad);
 
         launcher = LibClone.deployDeterministicERC1967BeaconProxy(beacon, config.salt);
         MintLauncher(launcher).initialize{value: msg.value}(hub, creator, config);
@@ -110,7 +136,7 @@ contract MintLauncherFactory is LauncherFactoryBase {
         fields[4] = FieldDescriptor({
             name: "targetRaise",
             fieldType: "uint256",
-            description: "BNB target that must be reached before the launch (also the pool quote)",
+            description: "BNB target; must meet the Portal launch floor at creation, max 10000 BNB",
             decimals: 18
         });
         fields[5] = FieldDescriptor({

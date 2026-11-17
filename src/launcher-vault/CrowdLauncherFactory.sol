@@ -7,6 +7,8 @@ import {LauncherFactoryBase} from "src/flap/LauncherFactoryBase.sol";
 import {LauncherDataSchema, FieldDescriptor} from "src/flap/IVaultSchemas.sol";
 import {CrowdLauncher, CrowdConfig} from "./CrowdLauncher.sol";
 import {CROWD_MIN_CONTRIBUTOR_BPS, CROWD_MAX_CONTRIBUTOR_BPS} from "./CrowdVault.sol";
+import {IPortalTypes} from "src/flap/IPortal.sol";
+import {IPortalLaunchFloor} from "src/common/IPortalLaunchFloor.sol";
 
 /// @title CrowdLauncherFactory
 /// @notice Launcher factory for `CrowdLauncher`. It is the Launcher half of a Launcher + Vault pair:
@@ -16,7 +18,8 @@ import {CROWD_MIN_CONTRIBUTOR_BPS, CROWD_MAX_CONTRIBUTOR_BPS} from "./CrowdVault
 ///         Strict checks in `_newLauncher` (all rejected, none defaulted):
 ///           - `vaultFactory == pairedVaultFactory`, set once at construction;
 ///           - `contributorBps` within [10%, 90%];
-///           - `targetRaise` and `saleDuration` non-zero and within sane bounds;
+///           - `targetRaise` meets the Portal's creation floor and stays within the safety cap;
+///           - `saleDuration` non-zero and within sane bounds;
 ///           - non-empty name, symbol, salt.
 ///
 ///         Upgrades: Guardian only, through the beacon. No other privileged function.
@@ -27,7 +30,6 @@ contract CrowdLauncherFactory is LauncherFactoryBase {
     /// @notice The vault factory every Launcher of this factory must use. Fixed at construction.
     address public immutable pairedVaultFactory;
 
-    uint256 public constant MIN_TARGET = 1 ether;
     uint256 public constant MAX_TARGET = 10_000 ether;
     uint256 public constant MAX_SALE_DURATION = 30 days;
 
@@ -35,6 +37,8 @@ contract CrowdLauncherFactory is LauncherFactoryBase {
     error WrongVaultFactory(address got, address expected);
     error InvalidContributorBps(uint256 bps);
     error TargetOutOfRange(uint256 got);
+    error QuoteNotEnabled();
+    error BelowLaunchFloor(uint256 haveUsd, uint256 needUsd);
     error SaleDurationOutOfRange(uint256 got);
     error EmptyField();
     error InvalidData();
@@ -68,9 +72,27 @@ contract CrowdLauncherFactory is LauncherFactoryBase {
         if (c.contributorBps < CROWD_MIN_CONTRIBUTOR_BPS || c.contributorBps > CROWD_MAX_CONTRIBUTOR_BPS) {
             revert InvalidContributorBps(c.contributorBps);
         }
-        if (c.targetRaise < MIN_TARGET || c.targetRaise > MAX_TARGET) revert TargetOutOfRange(c.targetRaise);
+        if (c.targetRaise == 0 || c.targetRaise > MAX_TARGET) revert TargetOutOfRange(c.targetRaise);
         if (c.saleDuration == 0 || c.saleDuration > MAX_SALE_DURATION) revert SaleDurationOutOfRange(c.saleDuration);
         if (bytes(c.name).length == 0 || bytes(c.symbol).length == 0 || c.salt == bytes32(0)) revert EmptyField();
+
+        IPortalLaunchFloor floorPortal = IPortalLaunchFloor(hub);
+        (bool enabled, uint256 price) =
+            floorPortal.launchQuoteConfig(uint8(IPortalTypes.LaunchKind.DIRECT_V2_POOL_TAX), address(0));
+        if (!enabled) revert QuoteNotEnabled();
+        // Read the current beacon implementation so a Guardian upgrade cannot make this preview use stale constants.
+        CrowdLauncher implementation = CrowdLauncher(payable(UpgradeableBeacon(beacon).implementation()));
+        IPortalLaunchFloor.GraduationFloorResultV2 memory floor = floorPortal.graduationFloorV2(
+            IPortalLaunchFloor.GraduationFloorParams({
+                quoteToken: address(0),
+                quotePriceUsd: price,
+                poolQuote: c.targetRaise,
+                poolToken: implementation.POOL_TOKEN(),
+                totalSupply: implementation.TOTAL_SUPPLY(),
+                vaultFactory: pairedVaultFactory
+            })
+        );
+        if (!floor.meetsCreateFloor) revert BelowLaunchFloor(floor.quoteUsdWad, floor.createFloorUsdWad);
 
         launcher = LibClone.deployDeterministicERC1967BeaconProxy(beacon, c.salt);
         CrowdLauncher(launcher).initialize{value: msg.value}(hub, creator, c);
@@ -94,7 +116,9 @@ contract CrowdLauncherFactory is LauncherFactoryBase {
         f[1] = FieldDescriptor("symbol", "string", "Token symbol", 0);
         f[2] = FieldDescriptor("meta", "string", "Metadata URI", 0);
         f[3] = FieldDescriptor("salt", "bytes32", "Vanity-mined launch salt", 0);
-        f[4] = FieldDescriptor("targetRaise", "uint256", "BNB target (1 to 10000)", 18);
+        f[4] = FieldDescriptor(
+            "targetRaise", "uint256", "BNB target; must meet the Portal launch floor at creation, max 10000 BNB", 18
+        );
         f[5] = FieldDescriptor("saleDuration", "uint256", "Contribution window in seconds (max 30 days)", 0);
         f[6] = FieldDescriptor("vaultFactory", "address", "Must be the paired CrowdVaultFactory", 0);
         f[7] = FieldDescriptor("contributorBps", "uint16", "Contributors' share of vault revenue (1000-9000)", 0);
